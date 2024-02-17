@@ -11,4 +11,5 @@ public class StarData{
     public string spect;
 
     public Vector3 position;
+    public StarDataMonobehaviour associatedObject;
 }
