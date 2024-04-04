@@ -8,6 +8,8 @@ public class StarDataParser : MonoBehaviour
 {
     private Dictionary<int, StarData> starDict = new Dictionary<int, StarData>();
     public TextAsset dataSource;
+    public bool isStarMovementPaused = false;
+
     //public GameObject player;
     public GameObject starPrefab;
     public TextMeshProUGUI distanceText;
@@ -16,7 +18,7 @@ public class StarDataParser : MonoBehaviour
     public float speed = 10.0f;
     public float magnitudeToScaleRatio = 1.0f;
     public bool ChangeColors = true;
-
+    public Vector3 lastStarGenerationPosition = Vector3.zero;
     public GameObject camcam;
     private string currentConstellationGroup = "modern"; // default 
 
@@ -29,6 +31,8 @@ public class StarDataParser : MonoBehaviour
     public static Vector3 InitialPos;
     public static Quaternion InitialRot;
 
+    
+
     // public Text distanceText;
 
     private GameObject constellationParent;
@@ -36,8 +40,6 @@ public class StarDataParser : MonoBehaviour
     
     void Start()
     {
-
-        // InitializePlayerAndUI();
 
         exoplanetDataSource = Resources.Load<TextAsset>("cleaned_exoplanet_data");
         ParseData();
@@ -79,6 +81,7 @@ public class StarDataParser : MonoBehaviour
                     star.absmag = float.Parse(values[6]);
                     star.spect = values[10];
                     star.position = new Vector3(float.Parse(values[2]),float.Parse(values[3]),float.Parse(values[4]));
+                    star.velocity = new Vector3(float.Parse(values[7]),float.Parse(values[8]),float.Parse(values[9]));
                     starList.Add(star);
                     starDict.Add(star.hip, star);
                 }
@@ -97,61 +100,139 @@ public class StarDataParser : MonoBehaviour
         starList.Sort((x,y)=> y.mag.CompareTo(x.mag));
     }
 
+    public HashSet<int> GetStarsInConstellations()
+    {
+        HashSet<int> starsInConstellations = new HashSet<int>();
+        TextAsset constellationFile = Resources.Load<TextAsset>("all_constellationship");
+        if (constellationFile != null)
+        {
+            string[] lines = constellationFile.text.Split('\n');
+            foreach (string line in lines)
+            {
+                string[] starhip = line.Trim().Split(' ');
+                for(int i=2; i<starhip.Length; i++)
+                {
+                    if (int.TryParse(starhip[i], out int hip))
+                    {
+                        starsInConstellations.Add(hip);
+                    }
+                    else
+                    {
+                        Debug.LogError("Failed to parse Hipparcos number: " + starhip[i]);
+                    }
+                }
+            }
+        }
+        return starsInConstellations;
+    }
+
+
+    void GenerateStarDynamic(StarData starData)
+    {
+        GameObject instance = Instantiate(starPrefab, starData.position, Quaternion.LookRotation(starData.position));
+        MeshRenderer meshRenderer = instance.GetComponent<MeshRenderer>();
+        LineRenderer lineRenderer = instance.GetComponent<LineRenderer>() ?? instance.AddComponent<LineRenderer>();
+
+        Color starColor;
+                switch (starData.spect[0]) 
+                {
+                    case 'O':
+                        starColor = Color.blue;
+                        break;
+                    case 'B':
+                        starColor = new Color(0.67f, 0.89f, 1f);  // Bluish white
+                        break;
+                    case 'A':
+                        starColor = Color.white;
+                        break;
+                    case 'F':
+                        starColor = new Color(1f, 1f, 0.75f);  // Yellowish white
+                        break;
+                    case 'G':
+                        starColor = Color.yellow;
+                        break;
+                    case 'K':
+                        starColor = new Color(1f, 0.65f, 0.35f);  // Light orange
+                        break;
+                    case 'M':
+                        starColor = new Color(1f, 0.55f, 0.41f);  // Orangish red
+                        break;
+                    default:
+                        starColor = Color.white;
+                        break;
+                }
+                instance.GetComponent<MeshRenderer>().material.color = starColor;
+                initialStarColors[starData.hip] = starColor;
+
+        starData.starObject = instance;
+        StarDataMonobehaviour starMonobehaviour = instance.GetComponent<StarDataMonobehaviour>();
+        starMonobehaviour.data = starData;
+    }
     
+    public void ToggleStarMovement()
+    {
+        isStarMovementPaused = !isStarMovementPaused;
+    }
+
     void GenerateStars()
     {
+        HashSet<int> starsInConstellations = GetStarsInConstellations();
+        Vector3 cameraPosition = camcam.transform.position;  // Get the camera's position
+
         foreach(StarData starData in starList)
         {
-            GameObject instance = Instantiate(starPrefab, starData.position, Quaternion.LookRotation(starData.position));
-
-            Color starColor;
-            switch (starData.spect[0]) 
+            starData.originalPosition = starData.position;
+            float distanceToCamera = Vector3.Distance(starData.position, cameraPosition);
+            if (starsInConstellations.Contains(starData.hip) || distanceToCamera <= 50)
             {
-                case 'O':
-                    starColor = Color.blue;
-                    break;
-                case 'B':
-                    starColor = new Color(0.67f, 0.89f, 1f);  // Bluish white
-                    break;
-                case 'A':
-                    starColor = Color.white;
-                    break;
-                case 'F':
-                    starColor = new Color(1f, 1f, 0.75f);  // Yellowish white
-                    break;
-                case 'G':
-                    starColor = Color.yellow;
-                    break;
-                case 'K':
-                    starColor = new Color(1f, 0.65f, 0.35f);  // Light orange
-                    break;
-                case 'M':
-                    starColor = new Color(1f, 0.55f, 0.41f);  // Orangish red
-                    break;
-                default:
-                    starColor = Color.white;
-                    break;
+                GameObject instance = Instantiate(starPrefab, starData.position, Quaternion.LookRotation(starData.position));
+
+                // Disable shadows
+                MeshRenderer meshRenderer = instance.GetComponent<MeshRenderer>();
+                meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+                Color starColor;
+                switch (starData.spect[0]) 
+                {
+                    case 'O':
+                        starColor = Color.blue;
+                        break;
+                    case 'B':
+                        starColor = new Color(0.67f, 0.89f, 1f);  // Bluish white
+                        break;
+                    case 'A':
+                        starColor = Color.white;
+                        break;
+                    case 'F':
+                        starColor = new Color(1f, 1f, 0.75f);  // Yellowish white
+                        break;
+                    case 'G':
+                        starColor = Color.yellow;
+                        break;
+                    case 'K':
+                        starColor = new Color(1f, 0.65f, 0.35f);  // Light orange
+                        break;
+                    case 'M':
+                        starColor = new Color(1f, 0.55f, 0.41f);  // Orangish red
+                        break;
+                    default:
+                        starColor = Color.white;
+                        break;
+                }
+                instance.GetComponent<MeshRenderer>().material.color = starColor;
+                initialStarColors[starData.hip] = starColor;
+
+                
+
+                starData.starObject = instance;
+                StarDataMonobehaviour starMonobehaviour = instance.GetComponent<StarDataMonobehaviour>();
+                starMonobehaviour.data = starData;
+
+                instance.transform.localScale *= magnitudeToScaleRatio * starData.absmag;
+
+                // Store the initial scale of the star
+                initialStarScales[starData.hip] = instance.transform.localScale;
             }
-            instance.GetComponent<MeshRenderer>().material.color = starColor;
-            initialStarColors[starData.hip] = starColor;
-
-            LineRenderer lineRenderer = instance.GetComponent<LineRenderer>();
-            if (lineRenderer == null)
-            {
-                lineRenderer = instance.AddComponent<LineRenderer>();
-            }
-            lineRenderer.material.color = Color.white;
-            lineRenderer.startWidth = 0.1f;
-            lineRenderer.endWidth = 0.1f;
-
-            starData.starObject = instance;
-            StarDataMonobehaviour starMonobehaviour = instance.GetComponent<StarDataMonobehaviour>();
-            starMonobehaviour.data = starData;
-
-            instance.transform.localScale *= magnitudeToScaleRatio * starData.absmag;
-
-            // Store the initial scale of the star
-            initialStarScales[starData.hip] = instance.transform.localScale;
         }
         //ChangeStarColors();
     }
@@ -159,59 +240,72 @@ public class StarDataParser : MonoBehaviour
 
     public void ChangeStarColors()
     {
+        HashSet<int> starsInConstellations = GetStarsInConstellations();
+        Vector3 cameraPosition = camcam.transform.position;  // Get the camera's position
+
         foreach (StarData starData in starList)
         {
-            GameObject instance = starData.starObject;
-
-            if (ChangeColors)
+            float distanceToCamera = Vector3.Distance(starData.position, cameraPosition);
+            if (starsInConstellations.Contains(starData.hip) || distanceToCamera <= 50)
             {
-                if (exoplanetDict.ContainsKey(starData.hip))
+                if (starData.starObject == null)
                 {
-                    int numPlanets = exoplanetDict[starData.hip];
-                    Color starColor;
-                    switch (numPlanets)
+                    GenerateStarDynamic(starData);
+                }
+
+                GameObject instance = starData.starObject;
+
+                if (ChangeColors)
+                {
+                    if (exoplanetDict.ContainsKey(starData.hip))
                     {
-                        case 1:
-                            starColor = Color.red;
-                            break;
-                        case 2:
-                            starColor = Color.blue;
-                            break;
-                        case 3:
-                            starColor = Color.green;
-                            break;
-                        case 4:
-                            starColor = Color.yellow;
-                            break;
-                        case 5:
-                            starColor = Color.magenta;
-                            break;
-                        case 6:
-                            starColor = Color.cyan;
-                            break;
-                        default:
-                            starColor = Color.white;
-                            break;
+                        int numPlanets = exoplanetDict[starData.hip];
+                        Color starColor;
+                        switch (numPlanets)
+                        {
+                            case 1:
+                                starColor = Color.red;
+                                break;
+                            case 2:
+                                starColor = Color.blue;
+                                break;
+                            case 3:
+                                starColor = Color.green;
+                                break;
+                            case 4:
+                                starColor = Color.yellow;
+                                break;
+                            case 5:
+                                starColor = Color.magenta;
+                                break;
+                            case 6:
+                                starColor = Color.cyan;
+                                break;
+                            default:
+                                starColor = Color.white;
+                                break;
+                        }
+                        instance.GetComponent<MeshRenderer>().material.color = starColor;
                     }
-                    instance.GetComponent<MeshRenderer>().material.color = starColor;
+                    else
+                    {
+                        instance.GetComponent<MeshRenderer>().material.color = Color.white;
+                    }
+                    
                 }
                 else
                 {
-                    instance.GetComponent<MeshRenderer>().material.color = Color.white;
+                    if (initialStarColors.ContainsKey(starData.hip))
+                    {
+                        instance.GetComponent<MeshRenderer>().material.color = initialStarColors[starData.hip];
+                    }
+                    
                 }
-                
-            }
-            else
-            {
-                if (initialStarColors.ContainsKey(starData.hip))
-                {
-                    instance.GetComponent<MeshRenderer>().material.color = initialStarColors[starData.hip];
-                }
-                
             }
         }
         ChangeColors = !ChangeColors;
     }
+
 
     public void ChangeConstellationGroup(string newGroup)
     {
@@ -267,9 +361,9 @@ public class StarDataParser : MonoBehaviour
                             GameObject constellation = new GameObject();
                             LineRenderer lineRenderer = constellation.AddComponent<LineRenderer>();
 
-                            // Change color
-                            //starMonobehaviour1.GetComponent<MeshRenderer>().material.color = new Color(1.0f, 0.5f, 0.0f);
-                            //starMonobehaviour2.GetComponent<MeshRenderer>().material.color = new Color(1.0f, 0.5f, 0.0f);
+                            // Disable shadows
+                            lineRenderer.receiveShadows = false;
+                            lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
                             // Change size (adjust the multiplier as needed)
                             starMonobehaviour1.transform.localScale *= 1.5f;
@@ -330,54 +424,73 @@ public class StarDataParser : MonoBehaviour
 
     public void OnIndianButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "indian";
         GenerateConstellations();
     }
 
     public void OnJapaneseButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "japanese";
         GenerateConstellations();
     }
 
     public void OnMaoriButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "maori";
         GenerateConstellations();
     }
 
     public void OnNorseButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "norse";
         GenerateConstellations();
     }
 
     public void OnSamoanButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "samoan";
         GenerateConstellations();
     }
 
     public void OnResetConstellationButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "modern";
         GenerateConstellations();
     }
 
     public void OnVirgoButtonClick()
     {
+        ResetStarPositions();
         currentConstellationGroup = "virgo";
         GenerateConstellations();
     }
 
     public void RemoveConstellations()
     {
+        ResetStarPositions();
         if (constellationParent != null)
         {
             Destroy(constellationParent);
         }
     }
 
+    public void ResetStarPositions()
+    {
+        foreach (StarData starData in starList)
+        {
+            if (starData.starObject != null)
+            {
+                starData.position = starData.originalPosition;
+                starData.starObject.transform.position = starData.originalPosition;
+            }
+        }
+    }
     // Update is called once per frame
     void Update()
     {
@@ -400,6 +513,39 @@ public class StarDataParser : MonoBehaviour
         // Update the UI text
         distanceText.text = "Distance to Sol: " + distanceToSol.ToString("F2") + " parsecs";
 
+        // Check the distance of each star to the camera
+        Vector3 cameraPosition = camcam.transform.position;  // Get the camera's position
+        float distanceMoved = Vector3.Distance(cameraPosition, lastStarGenerationPosition);
+        if (distanceMoved >= 10)
+        {
+            foreach (StarData starData in starList)
+            {
+                // Calculate the distance from the star to the camera
+                float distanceToCamera = Vector3.Distance(starData.position, cameraPosition);
+
+                // Check if the star is within 50 parsecs of the camera and hasn't been generated yet
+                if (distanceToCamera <= 50 && starData.starObject == null)
+                {
+                    GenerateStarDynamic(starData);
+                }
+            }
+            lastStarGenerationPosition = cameraPosition;
+        }
+        if (!isStarMovementPaused)
+        {
+            // Update the position of each star
+            foreach (StarData starData in starList)
+            {
+                if (starData.starObject != null)
+                {
+                    // Update the star's position based on its velocity and the elapsed time since the last frame
+                    starData.position += starData.velocity * Time.deltaTime*1000;
+
+                    // Update the position of the star's GameObject
+                    starData.starObject.transform.position = starData.position;
+                }
+            }
+        }
     }
 
 }

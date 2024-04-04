@@ -9,7 +9,11 @@ public class StarData{
     public float mag;
     public float absmag;
     public string spect;
+    public Vector3 velocity;
 
     public Vector3 position;
+    public Vector3 originalPosition;
+
     public GameObject starObject;
+    
 }
