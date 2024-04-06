@@ -14,24 +14,22 @@ public class StarDataParser : MonoBehaviour
         public StarData star2;
     }
     // Add a list to store the constellations
+    public float velocityMultiplier = 1.0f;
     public List<Constellation> constellations = new List<Constellation>();
     private Dictionary<int, StarData> starDict = new Dictionary<int, StarData>();
     public TextAsset dataSource;
     public bool isStarMovementPaused = true;
-
-    //public GameObject player;
+    //private int frameCounter = 0;
     public GameObject starPrefab;
     public TextMeshProUGUI distanceText;
+    public TextMeshProUGUI timeText;
     private Dictionary<int, Vector3> originalVelocities = new Dictionary<int, Vector3>();
     private Dictionary<int, Vector3> originalPositions = new Dictionary<int, Vector3>();
-    public int numberOfStarsToGenerate = 107546;
-    //public float speed = 10.0f;
+    public int numberOfStarsToGenerate = 107546;  
     public float magnitudeToScaleRatio = 1.0f;
     public bool ChangeColors = true;
-    //public float velocityMultiplier= 1.0f;
-
-    //public Slider velocitySlider;
-    //public Slider distanceSlider;
+    public int frameCounter = 0;
+    
     public Vector3 lastStarGenerationPosition = Vector3.zero;
     public GameObject camcam;
     private string currentConstellationGroup = "modern"; // default 
@@ -44,7 +42,7 @@ public class StarDataParser : MonoBehaviour
     private Dictionary<int, Color> initialStarColors = new Dictionary<int, Color>();
     public static Vector3 InitialPos;
     public static Quaternion InitialRot;
-
+    public float elapsedTime = 0f;
     
 
     // public Text distanceText;
@@ -63,6 +61,8 @@ public class StarDataParser : MonoBehaviour
         GenerateStars();
 
         GenerateConstellations();
+
+        InvokeRepeating("RotateStars", 0f, 0.25f);
 
         InitialPos = camcam.transform.position;
         InitialRot = camcam.transform.rotation;
@@ -400,8 +400,8 @@ public class StarDataParser : MonoBehaviour
                             // Use an Unlit shader
                             //lineRenderer.material = new Material(Shader.Find("Unlit/Color"));
                             lineRenderer.material.color = Color.white;
-                            lineRenderer.startWidth = 0.04f;
-                            lineRenderer.endWidth = 0.04f;
+                            lineRenderer.startWidth = 0.1f;
+                            lineRenderer.endWidth = 0.1f;
 
                             // Parent the constellation to the constellationParent
                             constellation.transform.parent = constellationParent.transform;
@@ -457,59 +457,77 @@ public class StarDataParser : MonoBehaviour
 
     public void OnIndianButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "indian";
         GenerateConstellations();
     }
 
     public void OnJapaneseButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "japanese";
         GenerateConstellations();
     }
 
     public void OnMaoriButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "maori";
         GenerateConstellations();
     }
 
     public void OnNorseButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "norse";
         GenerateConstellations();
     }
 
     public void OnSamoanButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "samoan";
         GenerateConstellations();
     }
 
     public void OnResetConstellationButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "modern";
         GenerateConstellations();
     }
 
     public void OnVirgoButtonClick()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         currentConstellationGroup = "virgo";
         GenerateConstellations(); // Pass in the color cyan
     }
 
-    public void RemoveConstellations()
+
+
+    public void RemoveConstellationsButton()
     {
-        ResetStarPositions();
+        //ResetStarPositions();
         if (constellationParent != null)
         {
             Destroy(constellationParent);
+        }
+        constellations.Clear();
+    }
+    
+    void RotateStars()
+    {
+        foreach (StarData starData in starList)
+        {
+            if (starData.starObject != null)
+            {
+                // Make the star face the camera
+                starData.starObject.transform.LookAt(camcam.transform);
+
+                // Rotate the star 180 degrees around the up axis
+                starData.starObject.transform.Rotate(0, 180, 0);
+            }
         }
     }
 
@@ -522,14 +540,29 @@ public class StarDataParser : MonoBehaviour
                 starData.position = starData.originalPosition;
                 starData.starObject.transform.position = starData.originalPosition;
             }
+        } 
+        // Reset the positions of the constellation lines
+        foreach (Constellation constellation in constellations)
+        {
+            if (constellation.constellationObject != null)
+            {
+                LineRenderer lineRenderer = constellation.constellationObject.GetComponent<LineRenderer>();
+                if (lineRenderer != null)
+                {
+                    // Assuming the constellation struct has references to the start and end stars
+                    lineRenderer.SetPosition(0, constellation.star1.originalPosition);
+                    lineRenderer.SetPosition(1, constellation.star2.originalPosition);
+                }
+            }
         }
-        
+        elapsedTime=0;
     }
+
 
     public void ChangeStarVelocities(float sliderValue)
     {
         // You can adjust this value to get the effect you want
-        float velocityMultiplier = sliderValue;
+        velocityMultiplier = sliderValue;
 
         foreach (StarData starData in starList)
         {
@@ -566,11 +599,22 @@ public class StarDataParser : MonoBehaviour
         }
     }
     
-    
 
     // Update is called once per frame
     void Update()
     {
+        frameCounter++;
+        if(isVelNegative==1 && !isStarMovementPaused)
+        {
+            elapsedTime += Time.deltaTime*velocityMultiplier;
+        }
+        else if(isVelNegative==-1 && !isStarMovementPaused)
+        {
+            elapsedTime -= Time.deltaTime*velocityMultiplier;
+        } 
+        
+        timeText.text = "Time Elapsed: "+ elapsedTime.ToString("F2");
+
         // Basic player movement
         // Get the player's input
         float moveHorizontal = Input.GetAxis("Horizontal");
@@ -580,9 +624,6 @@ public class StarDataParser : MonoBehaviour
 
         // Create a movement vector in the player's local space
         Vector3 movement = new Vector3(moveVertical, moveUp + moveDown, moveHorizontal);
-
-
-        //Debug.Log("Camera position: " + camcam.transform.position);
 
         // Calculate the distance from the camera to Sol in parsecs
         float distanceToSol = Vector3.Distance(camcam.transform.position, Vector3.zero);
@@ -609,6 +650,7 @@ public class StarDataParser : MonoBehaviour
             lastStarGenerationPosition = cameraPosition;
         }
 
+        
         if (!isStarMovementPaused)
         {
             // Update the position of each star
