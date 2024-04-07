@@ -615,16 +615,6 @@ public class StarDataParser : MonoBehaviour
         
         timeText.text = "Time Elapsed: "+ elapsedTime.ToString("F2");
 
-        // Basic player movement
-        // Get the player's input
-        float moveHorizontal = Input.GetAxis("Horizontal");
-        float moveVertical = Input.GetAxis("Vertical");
-        float moveUp = Input.GetKey(KeyCode.R) ? 1f : 0f;
-        float moveDown = Input.GetKey(KeyCode.F) ? -1f : 0f;
-
-        // Create a movement vector in the player's local space
-        Vector3 movement = new Vector3(moveVertical, moveUp + moveDown, moveHorizontal);
-
         // Calculate the distance from the camera to Sol in parsecs
         float distanceToSol = Vector3.Distance(camcam.transform.position, Vector3.zero);
 
