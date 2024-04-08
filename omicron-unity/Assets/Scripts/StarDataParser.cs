@@ -499,7 +499,11 @@ public class StarDataParser : MonoBehaviour
 
     public void OnVirgoButtonClick()
     {
-        //ResetStarPositions();
+        Vector3 lookAtPosition = new Vector3((float)8.787,(float)5.726,(float)0.655);
+        Vector3 virgoPosition = new Vector3((float)-11.489,(float)-2.112,(float)-0.296);
+        // Move the camera to focus on the Virgo constellation
+        camcam.transform.position = lookAtPosition;
+        camcam.transform.LookAt(virgoPosition);
         currentConstellationGroup = "virgo";
         GenerateConstellations(); // Pass in the color cyan
     }
@@ -597,7 +601,24 @@ public class StarDataParser : MonoBehaviour
                 starData.starObject.transform.position = starData.position;
             }
         }
+
+        // Update the positions of the constellation lines
+        foreach (Constellation constellation in constellations)
+        {
+            if (constellation.constellationObject != null)
+            {
+                LineRenderer lineRenderer = constellation.constellationObject.GetComponent<LineRenderer>();
+                if (lineRenderer != null)
+                {
+                    // Assuming the constellation struct has references to the start and end stars
+                    lineRenderer.SetPosition(0, constellation.star1.position);
+                    lineRenderer.SetPosition(1, constellation.star2.position);
+                }
+            }
+        }
     }
+
+
     
 
     // Update is called once per frame
