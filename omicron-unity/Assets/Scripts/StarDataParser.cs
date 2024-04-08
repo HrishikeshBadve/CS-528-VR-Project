@@ -634,7 +634,7 @@ public class StarDataParser : MonoBehaviour
             elapsedTime -= Time.deltaTime*velocityMultiplier;
         } 
         
-        timeText.text = "Time Elapsed: "+ elapsedTime.ToString("F2");
+        timeText.text = "Time Elapsed: "+ elapsedTime.ToString("F2")+ " years";
 
         // Calculate the distance from the camera to Sol in parsecs
         float distanceToSol = Vector3.Distance(camcam.transform.position, Vector3.zero);
